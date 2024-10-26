@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
         // Запрос на выполнение задачи каждый день
         val dailyWorkRequest = PeriodicWorkRequest.Builder(
             DatingReminderWorker::class.java,
-            15, TimeUnit.MINUTES // Период выполнения — каждые 24 часа
+            24, TimeUnit.HOURS // Период выполнения — каждые 24 часа
         )
             .setConstraints(constraints)
             .build()
