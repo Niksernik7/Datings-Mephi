@@ -1,50 +1,58 @@
 package com.example.datingsmephi
 
 import DatingReminderWorker
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.work.Constraints
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 
-
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        val constraints = Constraints.Builder()
-            .setRequiresCharging(false) // Не требует зарядки
-            .setRequiresBatteryNotLow(true) // Не запускается при низком уровне заряда
-            .build()
+        //WorkManager.getInstance(this).cancelAllWork()
+        // Настроим задачу на выполнение каждый день
+        val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val isWorkScheduled = sharedPreferences.getBoolean("is_work_scheduled", false)
 
-        // Запрос на выполнение задачи каждый день
-        val dailyWorkRequest = PeriodicWorkRequest.Builder(
-            DatingReminderWorker::class.java,
-            24, TimeUnit.HOURS // Период выполнения — каждые 24 часа
-        )
-            .setConstraints(constraints)
-            .build()
+        if (!isWorkScheduled) {
+            // Настроим задачу на выполнение каждый день
+            val constraints = Constraints.Builder()
+                .setRequiresCharging(false) // Не требует зарядки
+                .setRequiresBatteryNotLow(true) // Не запускается при низком уровне заряда
+                .build()
 
-        // Планирование задачи
-        WorkManager.getInstance(this).enqueue(dailyWorkRequest)
+            val dailyWorkRequest = PeriodicWorkRequest.Builder(
+                DatingReminderWorker::class.java,
+                24, TimeUnit.HOURS
+            )
+                .setConstraints(constraints)
+                .build()
 
-        val loginButton: Button = findViewById(R.id.loginButton)
-        val registerButton: Button = findViewById(R.id.registerButton)
+            // Планирование задачи
+            WorkManager.getInstance(this).enqueue(dailyWorkRequest)
 
-        loginButton.setOnClickListener {
-            val intent = Intent(this, LoginActivity::class.java)
-            startActivity(intent)
+            // Установить флаг
+            sharedPreferences.edit().putBoolean("is_work_scheduled", true).apply()
         }
 
-        registerButton.setOnClickListener {
-            // Переход на ConfirmActivity при нажатии "Зарегистрироваться"
-            val intent = Intent(this, ConfirmActivity::class.java)
-            startActivity(intent)
+        // Устанавливаем контент с использованием Compose
+        setContent {
+            MainScreen()
         }
     }
 }
