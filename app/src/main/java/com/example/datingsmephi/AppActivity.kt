@@ -1,15 +1,23 @@
 package com.example.datingsmephi
 
 import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.internal.composableLambdaInstance
+import androidx.compose.runtime.remember
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 class AppActivity : ComponentActivity() {
@@ -19,72 +27,77 @@ class AppActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-
-        //ОТСЮДА ДО СЛЕДУЮЩЕЙ ПОМЕТКИ ДОЛЖНО ЛЕЖАТЬ В DOMAIN?
-        //ВЫЗЫВАТЬСЯ ДОЛЖНО ПРИ НАЖАТИИ КНОПКИ PROFILESCREEN
-
-        lateinit var viewModel: ImageSelectionViewModel
-        viewModel = ViewModelProvider(this).get(ImageSelectionViewModel::class.java)
-
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                val imageUri: Uri? = result.data?.data
-                imageUri?.let {
-                    viewModel.updateImageUri(0, it) // Передаем URI напрямую
-                }
-            }
-        }
-
-        //ДО ЭТОГО МЕСТА
-
-
         //ОТСЮДА ДО СЛЕДУЮЩЕЙ ПОМЕТКИ ДОЛЖНО ЛЕЖАТЬ В DOMAIN?
         //ВЫЗЫВАТЬСЯ ДОЛЖНО ПРИ НАЖАТИИ КНОПКИ РЕДАКТИРОВАТЬ
 
-        val login = intent.getStringExtra("login") // Получаем переданный логин
         val context = this@AppActivity
+        val sph = SharedPreferencesHelper(context)
+        var userData = sph.loadProfile()
+        val UUID = sph.getUUID(context)
+        userData = userData.copy(UUID = UUID)
+        sph.saveProfile(userData, context)
 
-        val sharedPreferencesHelper = SharedPreferencesHelper(this)
+        CoroutineScope(Dispatchers.IO).launch {
+            sendGetUdRequest(context)
+        }
 
-        lifecycleScope.launch {
-            try {
-                val user_data = RetrofitInstance.api.getUserData(login.toString())
-                val user_data1 = user_data.body()
-                // Сохранение данных в SharedPreferences
-                sharedPreferencesHelper.saveProfile(user_data.body())
-                //////
-                /*
-                Toast.makeText(this@AppActivity, "Данные успешно загружены!", Toast.LENGTH_LONG).show()
-                Log.d("User", "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                Log.d("User", "group: ${user_data1?.group}")
-                Log.d("User", "course: ${user_data1?.course}")
-                Log.d("User", "averageGrade: ${user_data1?.averageGrade}")
-                Log.d("User", "lastName: ${user_data1?.lastName}")
-                Log.d("User", "firstName: ${user_data1?.firstName}")
-                Log.d("User", "middleName: ${user_data1?.middleName}")
-                Log.d("User", "gender: ${user_data1?.gender}")
-                Log.d("User", "age: ${user_data1?.age}")
-                Log.d("User", "height: ${user_data1?.height}")
-                Log.d("User", "isSmoking: ${user_data1?.isSmoking}")
-                Log.d("User", "isDrinking: ${user_data1?.isDrinking}")
-                Log.d("User", "zodiacSign: ${user_data1?.zodiacSign}")
-                Log.d("User", "sports: ${user_data1?.sports}")
-                Log.d("User", "music: ${user_data1?.music}")
-                Log.d("User", "aboutMe: ${user_data1?.aboutMe}")
-                Log.d("User", "goals: ${user_data1?.goals?.joinToString(", ")}")
-                Log.d("User", "interests: ${user_data1?.interests?.joinToString(", ")}")
 
-                 */
-                setContent {
-                    if (user_data1 != null) {
-                        AppScreen(user_data1, login, context, viewModel)
+        // ДО ЭТОГО МЕСТА
+        setContent {
+            AppScreen()
+        }
+    }
+
+    suspend fun sendGetUdRequest(
+        context: Context,
+    ) {
+        val sph = SharedPreferencesHelper(context)
+        val (accessToken, refreshToken) = sph.getTokens(context)
+        var userData: UserData? = null
+        val user_id = sph.getUUID(context)
+        val UUID = if (user_id != null) user_id else ""
+
+        try {
+            val response = RetrofitInstance.api.getUserData("Bearer $accessToken", UUID)
+            userData = response.body()
+            Log.e("TG", "${userData?.tg}")
+            when (response.code()) {
+                200 -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Данные успешно получены!!", Toast.LENGTH_LONG)
+                            .show()
+                        sph.saveProfile(userData, context)
                     }
                 }
-            } catch (e: Exception) {
-                Toast.makeText(this@AppActivity, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+
+                401 -> {
+                    refreshAccessToken(context)
+                    sendGetUdRequest(context)
+                }
+
+                500 -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Ошибка сервера 500: Попробуйте позже",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+
+                else -> {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Ошибка: ${response.code()}", Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_LONG)
+                    .show()
             }
         }
-        // ДО ЭТОГО МЕСТА
     }
 }
 

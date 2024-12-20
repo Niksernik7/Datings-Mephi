@@ -12,8 +12,9 @@
 
     <!-- Разрешения для работы с камерой и файлами -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
 
     <!-- Если нужно для Android 10 и выше, используйте разрешение для медиа-микросервиса -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:required="false" />
@@ -29,37 +30,12 @@
         tools:ignore="ExtraText">
 
         <activity
-            android:name=".RegistrationActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="auth.mephi.ru"
-                    android:pathPrefix="/callback"
-                    android:scheme="https" />
-            </intent-filter>
-        </activity>
-
-        <activity
-            android:name=".ConfirmActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <activity
             android:name=".AppActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 
         <activity
-            android:name=".LoginActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <activity
-            android:name=".MainActivity"
+            android:name=".Authorization"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>

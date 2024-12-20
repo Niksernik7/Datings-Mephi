@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.10"
+    id("kotlin-kapt") // Добавляем плагин для поддержки kapt
 }
 
 android {
@@ -65,13 +66,20 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.4.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
     implementation("com.github.bumptech.glide:glide:4.13.2")
-    annotationProcessor("com.github.bumptech.glide:compiler:4.13.2")
+    kapt("com.github.bumptech.glide:compiler:4.13.2") // Изменено на kapt
 
+    // Retrofit и OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.9.3")
     implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
+    implementation("com.google.accompanist:accompanist-flowlayout:0.30.1")
+
+    implementation("androidx.compose.animation:animation:1.5.3")
+
+    // Screen Navigation
+    implementation("androidx.navigation:navigation-compose:2.7.3")
 
     // UI компоненты Material3
     implementation("androidx.compose.material3:material3:1.0.0")
@@ -91,6 +99,11 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
 
+    // Для Room Database
+    implementation("androidx.room:room-runtime:2.6.0")
+    kapt("androidx.room:room-compiler:2.6.0") // Изменено на kapt
+    implementation("androidx.room:room-ktx:2.6.0")
+
     // Work Manager
     implementation("androidx.work:work-runtime-ktx:2.8.1")
 
@@ -98,6 +111,10 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.appcompat:appcompat:1.7.0-alpha03")
     implementation("androidx.browser:browser:1.6.0")
+
+    // Glide
+    implementation("com.github.bumptech.glide:glide:4.15.1")
+    kapt("com.github.bumptech.glide:compiler:4.15.1") // Изменено на kapt
 
     // Для Kotlin Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0") // Последняя версия JSON-сериализации

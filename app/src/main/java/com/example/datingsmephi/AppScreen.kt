@@ -1,11 +1,13 @@
 package com.example.datingsmephi
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
@@ -21,143 +23,173 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import com.example.datingsmephi.ImageSelectionViewModel
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.io.InputStream
-import java.util.zip.ZipInputStream
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
-fun extractImagesFromZip(zipInputStream: InputStream, outputDir: File): List<Uri> {
-    val extractedImages = mutableListOf<Uri>()
+suspend fun getImagesFromServer(
+    context: Context,
+) {
+    val sph = SharedPreferencesHelper(context)
+    val (accessToken, refreshToken) = sph.getTokens(context)
+    val user_id = sph.getUUID(context)
+    val UUID = if (user_id == null) "" else user_id
 
-    try {
-        val zis = ZipInputStream(zipInputStream)
-        var zipEntry = zis.nextEntry
-
-        while (zipEntry != null) {
-            if (!zipEntry.isDirectory) {
-                val fileName = zipEntry.name.substringAfterLast("/")
-                val tempFile = File(outputDir, fileName)
-
-                FileOutputStream(tempFile).use { outputStream ->
-                    val buffer = ByteArray(1024)
-                    var len: Int
-                    while (zis.read(buffer).also { len = it } > 0) {
-                        outputStream.write(buffer, 0, len)
-                    }
-                }
-
-                extractedImages.add(Uri.fromFile(tempFile)) // Добавляем извлеченное изображение как URI
-            }
-            zipEntry = zis.nextEntry
+    if (accessToken.isNullOrEmpty() || UUID.isEmpty()) {
+        Log.e("FetchError", "Access token or UUID is missing")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Данные для запроса отсутствуют", Toast.LENGTH_LONG).show()
         }
-
-        zis.closeEntry()
-        zis.close()
-    } catch (e: IOException) {
-        e.printStackTrace()
+        return
     }
 
-    return extractedImages
-}
+    // Инициализация Retrofit API
+    val apiService = RetrofitInstance.api
 
-fun fetchZipAndExtractImages(
-    context: Context,
-    login: String?,
-    onImagesExtracted: (List<Uri>) -> Unit
-) {
-    val zipUrl = "http://10.0.2.2:5002/api/users/get_user_images?login=$login" // Замените на ваш реальный URL
-    val client = OkHttpClient()
+    try {
+        // Выполняем запрос к серверу
+        val response = apiService.getUserImagesPaths("Bearer $accessToken", UUID)
 
-    val request = Request.Builder()
-        .url(zipUrl)
-        .build()
+        when (response.code()) {
+            200 -> {
+                // Парсим JSON и получаем массив ссылок
+                val photoNames = response.body()?.photo_name ?: emptyList()
+                withContext(Dispatchers.Main) {
+                    val UserImagesPaths = UserImagesPaths(photoNames)
+                    sph.setUserImagesPaths(UserImagesPaths)
+                }
 
-    client.newCall(request).enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            e.printStackTrace()
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            if (response.isSuccessful) {
-                val zipInputStream = response.body?.byteStream()
-                zipInputStream?.let {
-                    val tempDir = File(context.cacheDir, "extracted_images").apply {
-                        if (!exists()) mkdir()
+                if (photoNames.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Пути получены",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
-                    val images = extractImagesFromZip(it, tempDir)
-                    // Вызываем коллбэк с результатом
-                    Handler(Looper.getMainLooper()).post {
-                        onImagesExtracted(images)
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "У вас нет фоток",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
-            } else {
-                Handler(Looper.getMainLooper()).post {
+            }
+            401 -> {
+                refreshAccessToken(context)
+                getImagesFromServer(context)
+            }
+
+            500 -> {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Ошибка сервера 500",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+            else -> {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Ответ не положительный",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
-    })
+    } catch (e: Exception) {
+        Log.e("FetchError", "Error fetching images: ${e.message}")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(
+                context,
+                "Ошибка получения путей",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 }
 
 
 
+
+@SuppressLint("CoroutineCreationDuringComposition")
 @Composable
-fun AppScreen(userData: UserData, login: String?, context: Context, viewModel: ImageSelectionViewModel) {
+fun AppScreen() {
+    val navController = rememberNavController()
     var selectedItem by remember { mutableStateOf(0) }
     val items = listOf("Survey", "Likes", "Profile")
-    val context: Context = LocalContext.current
+    Log.e("Survey", "Вызвался AppScreen")
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                items.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        icon = {
-                            when (item) {
-                                "Likes" -> Icon(
-                                    imageVector = Icons.Filled.Favorite,
-                                    contentDescription = "Likes"
-                                )
+            Box(
+                modifier = Modifier
+                    .height(56.dp)
+            ) {
+                NavigationBar(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    containerColor = Color.LightGray
+                ) {
+                    items.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            icon = {
+                                when (item) {
+                                    "Likes" -> Icon(
+                                        imageVector = Icons.Filled.Favorite,
+                                        contentDescription = "Likes"
+                                    )
 
-                                "Survey" -> Icon(
-                                    imageVector = Icons.Filled.Assessment,
-                                    contentDescription = "Survey"
-                                )
+                                    "Survey" -> Icon(
+                                        imageVector = Icons.Filled.Assessment,
+                                        contentDescription = "Survey"
+                                    )
 
-                                "Profile" -> Icon(
-                                    imageVector = Icons.Filled.Person,
-                                    contentDescription = "Profile"
-                                )
+                                    "Profile" -> Icon(
+                                        imageVector = Icons.Filled.Person,
+                                        contentDescription = "Profile"
+                                    )
+                                }
+                            },
+                            selected = selectedItem == index,
+                            onClick = {
+                                selectedItem = index
+                                when (index) {
+                                    0 -> navController.navigate("survey_screen") {
+                                        navController.popBackStack()
+                                    }
+
+                                    1 -> navController.navigate("likes_screen") {
+                                        navController.popBackStack()
+                                    }
+
+                                    2 -> navController.navigate("profile_screen") {
+                                        navController.popBackStack()
+                                    }
+                                }
                             }
-                        },
-                        selected = selectedItem == index,
-                        onClick = { selectedItem = index }
-                    )
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            when (selectedItem) {
-                0 -> SurveyScreen()
-                1 -> LikesScreen()
-                2 -> {
-                    ProfileScreen(login, context)
-                    fetchZipAndExtractImages(
-                        context = context,
-                        login = login ?: ""
-                    ) { extractedImages ->
-                            viewModel.setImageUrisWithPlaceholders(extractedImages) // Передаем фотографии с заполнением
-                    }
-                }
-            }
+            AppNavigation(navController)
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun AppScreenPreview() {
+    AppScreen()
 }
